@@ -17,6 +17,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:secureher/services/emergency_contact_service.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:secureher/screens/login_screen.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -35,6 +36,34 @@ class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey _crimeAnalysisKey = GlobalKey();
   final GlobalKey _sosKey = GlobalKey();
   bool _isLoading = false;
+  bool _isSirenPlaying = false;
+  final AudioPlayer _audioPlayer = AudioPlayer();
+
+  @override
+  void initState() {
+    super.initState();
+    _audioPlayer.setReleaseMode(ReleaseMode.loop);
+  }
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  Future<void> _toggleSiren() async {
+    if (_isSirenPlaying) {
+      await _audioPlayer.stop();
+      setState(() {
+        _isSirenPlaying = false;
+      });
+    } else {
+      await _audioPlayer.play(AssetSource('policesiren.mp3'));
+      setState(() {
+        _isSirenPlaying = true;
+      });
+    }
+  }
 
   Future<void> _sendSOS() async {
     setState(() => _isLoading = true);
@@ -446,7 +475,14 @@ class _HomeScreenState extends State<HomeScreen> {
               bottom: 80,
               right: 16,
               child: GestureDetector(
-                onTap: _isLoading ? null : _sendSOS,
+                onTap: _isLoading ? null : () {
+                  if (!_isSirenPlaying) {
+                    _sendSOS();
+                    _toggleSiren();
+                  } else {
+                    _toggleSiren();
+                  }
+                },
                 child: Container(
                   width: 80,
                   height: 80,
@@ -454,7 +490,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.red.withOpacity(0.3),
+                        color: (_isSirenPlaying ? Colors.green : Colors.red).withOpacity(0.3),
                         spreadRadius: 2,
                         blurRadius: 5,
                         offset: const Offset(0, 3),
@@ -465,12 +501,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     alignment: Alignment.center,
                     children: [
                       Image.asset(
-                        'assets/SOS.png',
+                        _isSirenPlaying ? 'assets/greensos.png' : 'assets/SOS.png',
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
-                          return const Icon(
+                          return Icon(
                             Icons.sos,
-                            color: Colors.red,
+                            color: _isSirenPlaying ? Colors.green : Colors.red,
                             size: 40,
                           );
                         },
