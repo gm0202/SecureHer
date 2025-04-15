@@ -30,6 +30,14 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  webview_flutter: ^4.4.2
+  url_launcher: ^6.2.4
+  toastification: ^1.1.0
+  geolocator: ^10.1.0
+  geocoding: ^2.1.1
+  share_plus: ^7.2.1
+  flutter_phone_direct_caller: ^2.0.2
+  shared_preferences: ^2.2.2
   
 
   # The following adds the Cupertino Icons font to your application.
@@ -38,14 +46,6 @@ dependencies:
   # toastification: ^3.0.2
   google_fonts: ^6.2.1
   carousel_slider: 4.1.1
-  webview_flutter: ^4.7.0
-  flutter_phone_direct_caller: ^2.2.1
-  url_launcher: ^6.1.14
-  toastification: ^1.0.0
-  geocoding: ^2.1.1
-  geolocator: ^10.1.0
-  share_plus: ^7.2.1
-  sqflite: ^2.3.0
   path_provider: ^2.1.1
   firebase_core: ^3.13.0
   cloud_firestore: ^5.6.6

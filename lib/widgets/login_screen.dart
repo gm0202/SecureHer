@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:secureher/home_screen.dart';
 import 'package:toastification/toastification.dart';
+import 'package:secureher/screens/onboarding_screen.dart';
+import 'package:secureher/services/emergency_contact_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -14,6 +16,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _emergencyContactService = EmergencyContactService();
   bool _isLogin = true;
   bool _isLoading = false;
 
@@ -24,76 +27,25 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _login() async {
-    try {
-      final userCredential = await FirebaseAuth.instance
-          .signInWithEmailAndPassword(
-            email: _emailController.text.trim(),
-            password: _passwordController.text.trim(),
-          );
-
-      toastification.show(
-        context: context,
-        title: const Text('Login successful!'),
-        autoCloseDuration: const Duration(seconds: 3),
-      );
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
-    } on FirebaseAuthException {
-      toastification.show(
-        context: context,
-        // title: Text(e.message ?? 'Login failed'),
-        title: Text('No account found, Kindly register!'),
-
-        type: ToastificationType.error,
-        autoCloseDuration: const Duration(seconds: 3),
-      );
-    }
-  }
-
-  Future<void> _register() async {
-    try {
-      final userCredential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
-            email: _emailController.text.trim(),
-            password: _passwordController.text.trim(),
-          );
-
-      toastification.show(
-        context: context,
-        title: const Text('Registration successful!'),
-        autoCloseDuration: const Duration(seconds: 3),
-      );
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
-    } on FirebaseAuthException catch (e) {
-      toastification.show(
-        context: context,
-        title: Text(e.message ?? 'Registration failed'),
-        type: ToastificationType.error,
-        autoCloseDuration: const Duration(seconds: 3),
-      );
-    }
-  }
-
-  void _submit() {
+  Future<void> _handleLogin() async {
     if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
-
-      Future.delayed(Duration.zero, () async {
-        if (_isLogin) {
-          await _login();
+      // Here you would typically validate the credentials with your backend
+      // For now, we'll just check if onboarding is needed
+      final isOnboardingCompleted = await _emergencyContactService.isOnboardingCompleted();
+      
+      if (mounted) {
+        if (!isOnboardingCompleted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const OnboardingScreen()),
+          );
         } else {
-          await _register();
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+          );
         }
-        setState(() => _isLoading = false);
-      });
+      }
     }
   }
 
@@ -197,7 +149,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 24),
                     ElevatedButton(
-                      onPressed: _isLoading ? null : _submit,
+                      onPressed: _isLoading ? null : _handleLogin,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 32,

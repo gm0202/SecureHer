@@ -1,7 +1,10 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:secureher/firebase_options.dart';
-import 'package:secureher/widgets/login_screen.dart';
+import 'package:secureher/home_screen.dart';
+import 'package:secureher/screens/contacts_screen.dart';
+import 'package:secureher/widgets/bottom_navigation.dart';
+import 'package:secureher/screens/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,7 +21,7 @@ class MyApp extends StatelessWidget {
       title: 'SecureHer',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        primarySwatch: Colors.pink,
         useMaterial3: true,
       ),
       home: const LoginScreen(),
