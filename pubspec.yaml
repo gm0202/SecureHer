@@ -39,6 +39,7 @@ dependencies:
   flutter_phone_direct_caller: ^2.0.2
   shared_preferences: ^2.2.2
   audioplayers: ^5.2.1
+  google_maps_flutter: ^2.5.3
   
 
   # The following adds the Cupertino Icons font to your application.
@@ -51,6 +52,8 @@ dependencies:
   firebase_core: ^3.13.0
   cloud_firestore: ^5.6.6
   firebase_auth: ^5.5.2
+  syncfusion_flutter_maps: ^23.2.7
+  permission_handler: ^11.1.0
   
   
 

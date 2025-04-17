@@ -27,8 +27,8 @@ class BottomNavigation extends StatelessWidget {
           label: 'Contacts',
         ),
         BottomNavigationBarItem(
-          icon: Icon(Icons.person),
-          label: 'Profile',
+          icon: Icon(Icons.map),
+          label: 'Live Track',
         ),
       ],
     );
