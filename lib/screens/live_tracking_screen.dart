@@ -1,22 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:geocoding/geocoding.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:secureher/theme/app_theme.dart';
 
 class LiveTrackingScreen extends StatefulWidget {
-  const LiveTrackingScreen({Key? key}) : super(key: key);
+  const LiveTrackingScreen({super.key});
 
   @override
-  _LiveTrackingScreenState createState() => _LiveTrackingScreenState();
+  State<LiveTrackingScreen> createState() => _LiveTrackingScreenState();
 }
 
 class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   GoogleMapController? _mapController;
   Position? _currentPosition;
-  String _address = '';
   bool _isLoading = true;
-  final Set<Marker> _markers = {};
 
   @override
   void initState() {
@@ -25,67 +23,51 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   }
 
   Future<void> _getCurrentLocation() async {
-    try {
-      // Check location permission
-      var status = await Permission.location.request();
-      if (status.isDenied) {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
         setState(() => _isLoading = false);
         return;
       }
+    }
 
-      // Get current position
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      // Get address from coordinates
-      List<Placemark> placemarks = await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
-
-      setState(() {
-        _currentPosition = position;
-        _address = placemarks.isNotEmpty
-            ? '${placemarks[0].street}, ${placemarks[0].locality}, ${placemarks[0].country}'
-            : 'Address not available';
-        _isLoading = false;
-        _updateMarkers();
-      });
-
-      // Start location updates
-      Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          distanceFilter: 10, // Update every 10 meters
-        ),
-      ).listen((Position position) {
-        setState(() {
-          _currentPosition = position;
-          _updateMarkers();
-        });
-      });
-    } catch (e) {
+    if (permission == LocationPermission.deniedForever) {
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error getting location: $e')),
+      return;
+    }
+
+    Position position = await Geolocator.getCurrentPosition();
+    setState(() {
+      _currentPosition = position;
+      _isLoading = false;
+    });
+
+    if (_mapController != null) {
+      _mapController!.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: LatLng(position.latitude, position.longitude),
+            zoom: 15,
+          ),
+        ),
       );
     }
   }
 
-  void _updateMarkers() {
+  Future<void> _shareLocation() async {
     if (_currentPosition != null) {
-      _markers.clear();
-      _markers.add(
-        Marker(
-          markerId: const MarkerId('current_location'),
-          position: LatLng(
-            _currentPosition!.latitude,
-            _currentPosition!.longitude,
-          ),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-        ),
-      );
+      String locationMessage = 'My current location is: https://www.google.com/maps?q=${_currentPosition!.latitude},${_currentPosition!.longitude}';
+      await Share.share(locationMessage);
     }
   }
 
@@ -93,70 +75,60 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Live Location Tracking'),
-        backgroundColor: Colors.purple,
+        title: const Text('Live Tracking'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.share),
+            onPressed: _shareLocation,
+          ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _currentPosition == null
-              ? const Center(child: Text('Location not available'))
-              : Column(
-                  children: [
-                    Expanded(
-                      child: GoogleMap(
-                        initialCameraPosition: CameraPosition(
-                          target: LatLng(
-                            _currentPosition!.latitude,
-                            _currentPosition!.longitude,
-                          ),
-                          zoom: 15,
-                        ),
-                        markers: _markers,
-                        myLocationEnabled: true,
-                        myLocationButtonEnabled: true,
-                        mapType: MapType.normal,
-                        onMapCreated: (GoogleMapController controller) {
-                          _mapController = controller;
-                        },
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.location_off,
+                        size: 64,
+                        color: Colors.grey,
                       ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Current Location:',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 8),
-                          Text('Latitude: ${_currentPosition!.latitude}'),
-                          Text('Longitude: ${_currentPosition!.longitude}'),
-                          const SizedBox(height: 8),
-                          Text('Address: $_address'),
-                          const SizedBox(height: 16),
-                          ElevatedButton.icon(
-                            onPressed: () {
-                              // TODO: Implement location sharing
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Location sharing feature coming soon!'),
-                                ),
-                              );
-                            },
-                            icon: const Icon(Icons.share),
-                            label: const Text('Share Location'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.purple,
-                              foregroundColor: Colors.white,
-                              minimumSize: const Size(double.infinity, 50),
-                            ),
-                          ),
-                        ],
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Location services are disabled',
+                        style: TextStyle(fontSize: 18),
                       ),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: _getCurrentLocation,
+                        child: const Text('Enable Location'),
+                      ),
+                    ],
+                  ),
+                )
+              : GoogleMap(
+                  initialCameraPosition: CameraPosition(
+                    target: LatLng(
+                      _currentPosition!.latitude,
+                      _currentPosition!.longitude,
                     ),
-                  ],
+                    zoom: 15,
+                  ),
+                  onMapCreated: (GoogleMapController controller) {
+                    _mapController = controller;
+                  },
+                  myLocationEnabled: true,
+                  myLocationButtonEnabled: true,
+                  zoomControlsEnabled: true,
+                  mapType: MapType.normal,
                 ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _getCurrentLocation,
+        backgroundColor: AppTheme.accentColor,
+        child: const Icon(Icons.my_location),
+      ),
     );
   }
 

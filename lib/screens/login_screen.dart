@@ -6,7 +6,14 @@ import 'package:secureher/screens/register_screen.dart';
 import 'package:secureher/services/emergency_contact_service.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final VoidCallback toggleTheme;
+  final bool isDarkMode;
+
+  const LoginScreen({
+    super.key,
+    required this.toggleTheme,
+    required this.isDarkMode,
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -37,22 +44,19 @@ class _LoginScreenState extends State<LoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-
-      final isOnboardingCompleted = await _emergencyContactService.isOnboardingCompleted();
       
       if (!mounted) return;
-
-      if (!isOnboardingCompleted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const OnboardingScreen()),
-        );
-      } else {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const MainScreen()),
-        );
-      }
+      
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MainScreen(
+            toggleTheme: widget.toggleTheme,
+            isDarkMode: widget.isDarkMode,
+            onLogout: () {}, // This will be handled by AuthWrapper
+          ),
+        ),
+      );
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -68,6 +72,18 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Login'),
+        actions: [
+          IconButton(
+            icon: Icon(
+              widget.isDarkMode ? Icons.light_mode : Icons.dark_mode,
+              color: Colors.white,
+            ),
+            onPressed: widget.toggleTheme,
+          ),
+        ],
+      ),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -171,7 +187,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => const RegisterScreen()),
+                          MaterialPageRoute(
+                            builder: (context) => RegisterScreen(
+                              toggleTheme: widget.toggleTheme,
+                              isDarkMode: widget.isDarkMode,
+                            ),
+                          ),
                         );
                       },
                       child: const Text(
