@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:secureher/theme/app_theme.dart';
 import 'package:secureher/screens/login_screen.dart';
-import 'package:secureher/screens/register_screen.dart';
 import 'package:secureher/screens/main_screen.dart';
+import 'package:secureher/screens/register_screen.dart';
 import 'package:secureher/screens/onboarding_screen.dart';
 import 'package:secureher/screens/location_sharing_screen.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secureher/services/emergency_contact_service.dart';
 import 'package:secureher/services/location_service.dart';
 
@@ -15,35 +17,54 @@ void main() async {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  ThemeMode _themeMode = ThemeMode.system;
+  bool _isDarkMode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadThemePreference();
+  }
+
+  Future<void> _loadThemePreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isDarkMode = prefs.getBool('isDarkMode') ?? false;
+      _themeMode = _isDarkMode ? ThemeMode.dark : ThemeMode.light;
+    });
+  }
+
+  Future<void> _toggleTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isDarkMode = !_isDarkMode;
+      _themeMode = _isDarkMode ? ThemeMode.dark : ThemeMode.light;
+      prefs.setBool('isDarkMode', _isDarkMode);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'SecureHer',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.pink,
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.pink,
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
-      themeMode: ThemeMode.system,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: _themeMode,
       initialRoute: '/',
       onGenerateRoute: (settings) {
         if (settings.name == '/') {
-          return MaterialPageRoute(builder: (_) => const AuthWrapper());
+          return MaterialPageRoute(builder: (_) => AuthWrapper(onThemeToggle: _toggleTheme));
         } else if (settings.name == '/main') {
-          return MaterialPageRoute(builder: (_) => const MainScreen());
+          return MaterialPageRoute(builder: (_) => MainScreen(onThemeToggle: _toggleTheme));
         } else if (settings.name == '/login') {
           return MaterialPageRoute(builder: (_) => const LoginScreen());
         } else if (settings.name == '/register') {
@@ -60,7 +81,7 @@ class MyApp extends StatelessWidget {
           final sharingCode = initialRoute.split('/').last;
           return [
             MaterialPageRoute(
-              builder: (_) => const AuthWrapper(),
+              builder: (_) => AuthWrapper(onThemeToggle: _toggleTheme),
               settings: RouteSettings(
                 name: '/',
                 arguments: {'sharingCode': sharingCode},
@@ -70,7 +91,7 @@ class MyApp extends StatelessWidget {
         }
         return [
           MaterialPageRoute(
-            builder: (_) => const AuthWrapper(),
+            builder: (_) => AuthWrapper(onThemeToggle: _toggleTheme),
             settings: const RouteSettings(name: '/'),
           ),
         ];
@@ -79,36 +100,10 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class AuthWrapper extends StatefulWidget {
-  const AuthWrapper({super.key});
+class AuthWrapper extends StatelessWidget {
+  final VoidCallback onThemeToggle;
 
-  @override
-  State<AuthWrapper> createState() => _AuthWrapperState();
-}
-
-class _AuthWrapperState extends State<AuthWrapper> {
-  final LocationService _locationService = LocationService();
-  String? _sharingCode;
-
-  @override
-  void initState() {
-    super.initState();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _checkInitialRoute();
-  }
-
-  void _checkInitialRoute() {
-    final route = ModalRoute.of(context)?.settings.name;
-    if (route != null && route.startsWith('secureher://track/')) {
-      setState(() {
-        _sharingCode = route.split('/').last;
-      });
-    }
-  }
+  const AuthWrapper({super.key, required this.onThemeToggle});
 
   @override
   Widget build(BuildContext context) {
@@ -116,35 +111,19 @@ class _AuthWrapperState extends State<AuthWrapper> {
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
         }
 
         if (snapshot.hasData) {
-          if (_sharingCode != null) {
-            _handleSharingCode();
-          }
-          return const MainScreen();
+          return MainScreen(onThemeToggle: onThemeToggle);
         }
 
         return const LoginScreen();
       },
     );
-  }
-
-  Future<void> _handleSharingCode() async {
-    try {
-      await _locationService.handleDeepLink(
-        Uri.parse('secureher://track/$_sharingCode'),
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location sharing started successfully')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error starting location sharing: $e')),
-      );
-    }
   }
 }

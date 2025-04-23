@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
-import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
+import 'package:flutter/services.dart';
 import '../services/emergency_contact_service.dart';
+import '../services/location_service.dart';
 
 class SOSButton extends StatefulWidget {
   const SOSButton({Key? key}) : super(key: key);
@@ -13,7 +13,9 @@ class SOSButton extends StatefulWidget {
 }
 
 class _SOSButtonState extends State<SOSButton> {
+  static const platform = MethodChannel('com.secureher.app/whatsapp');
   final EmergencyContactService _contactService = EmergencyContactService();
+  final LocationService _locationService = LocationService();
   bool _isLoading = false;
 
   Future<String> _getCurrentLocation() async {
@@ -31,6 +33,10 @@ class _SOSButtonState extends State<SOSButton> {
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
+
+      // Start sharing location
+      await _locationService.startSharingLocation();
+      final sharingLink = await _locationService.generateShareableLink();
 
       // Get address from coordinates
       List<Placemark> placemarks = await placemarkFromCoordinates(
@@ -58,9 +64,12 @@ Latitude: ${position.latitude}
 Longitude: ${position.longitude}
 Address: $address
 
+📍 Live Location Tracking:
+$sharingLink
+
 Please help me!
 
-📍 Location: https://www.google.com/maps?q=${position.latitude},${position.longitude}''';
+📍 Static Location: https://www.google.com/maps?q=${position.latitude},${position.longitude}''';
       }
 
       return '''
@@ -72,9 +81,12 @@ I need immediate help!
 Latitude: ${position.latitude}
 Longitude: ${position.longitude}
 
+📍 Live Location Tracking:
+$sharingLink
+
 Please help me!
 
-📍 Location: https://www.google.com/maps?q=${position.latitude},${position.longitude}''';
+📍 Static Location: https://www.google.com/maps?q=${position.latitude},${position.longitude}''';
     } catch (e) {
       print('Error getting location: $e');
       return '''
@@ -85,20 +97,6 @@ I need immediate help!
 📍 Location tracking failed. Please try again.
 
 Please help me!''';
-    }
-  }
-
-  Future<void> _openWhatsApp(String phone, String message) async {
-    final url = Uri.parse(_contactService.getWhatsAppUrl(phone, message));
-    
-    print('Attempting to open WhatsApp with URL: ${url.toString()}');
-    
-    if (await canLaunchUrl(url)) {
-      print('Launching WhatsApp...');
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    } else {
-      print('Could not launch WhatsApp');
-      throw 'Could not launch WhatsApp';
     }
   }
 
@@ -120,72 +118,49 @@ Please help me!''';
       }
 
       final message = await _getCurrentLocation();
-      await _openWhatsApp(phone, message);
+      
+      // Call native method to open WhatsApp
+      await platform.invokeMethod('openWhatsApp', {
+        'phone': phone,
+        'message': message,
+      });
+    } on PlatformException catch (e) {
+      print("Error opening WhatsApp: ${e.message}");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open WhatsApp. Please make sure it is installed.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } catch (e) {
       print('Error handling SOS: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not open WhatsApp. Please make sure it is installed.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('An error occurred. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(
-        minWidth: 56,
-        minHeight: 56,
-        maxWidth: 100,
-        maxHeight: 100,
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: _isLoading ? null : _handleSOS,
-          customBorder: const CircleBorder(),
-          child: Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: _isLoading ? Colors.grey : Colors.red,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.red.withOpacity(0.3),
-                  blurRadius: 10,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-            child: Center(
-              child: _isLoading
-                  ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Text(
-                      'SOS',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-            ),
-          ),
-        ),
-      ),
+    return FloatingActionButton(
+      onPressed: _isLoading ? null : _handleSOS,
+      backgroundColor: Colors.red,
+      child: _isLoading
+          ? const CircularProgressIndicator(color: Colors.white)
+          : const Icon(Icons.sos, color: Colors.white),
     );
   }
 } 

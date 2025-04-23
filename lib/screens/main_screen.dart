@@ -67,6 +67,14 @@ class _MainScreenState extends State<MainScreen> {
 
       // Get current location
       Position position = await Geolocator.getCurrentPosition();
+      
+      // Generate Google Maps URL
+      String mapsUrl = 'https://www.google.com/maps?q=${position.latitude},${position.longitude}';
+      
+      // Generate live tracking URL with timestamp as code
+      String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      String liveTrackingUrl = 'https://livetrackingofuser.vercel.app/?code=$timestamp';
+
       String locationMessage = '''🚨 SOS ALERT 🚨
 
 I need immediate help!
@@ -75,9 +83,10 @@ I need immediate help!
 Latitude: ${position.latitude}
 Longitude: ${position.longitude}
 
-Please help me!
+📍 Static Location: $mapsUrl
+📍 Live Tracking: $liveTrackingUrl
 
-📍 Location: https://www.google.com/maps?q=${position.latitude},${position.longitude}''';
+Please help me!''';
 
       // Share via WhatsApp
       await Share.share(
@@ -85,9 +94,9 @@ Please help me!
         subject: 'Emergency SOS Alert',
       );
     } else {
-    setState(() {
+      setState(() {
         _isSOSActive = false;
-    });
+      });
       await _audioPlayer.stop();
     }
   }
