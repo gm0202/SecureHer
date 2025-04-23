@@ -3,168 +3,264 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 class HiddenCameraDetector extends StatefulWidget {
-  const HiddenCameraDetector({super.key});
+  const HiddenCameraDetector({Key? key}) : super(key: key);
 
   @override
-  State<HiddenCameraDetector> createState() => _HiddenCameraDetectorState();
+  _HiddenCameraDetectorState createState() => _HiddenCameraDetectorState();
 }
 
 class _HiddenCameraDetectorState extends State<HiddenCameraDetector> {
+  final _audioPlayer = AudioPlayer();
+  StreamSubscription<MagnetometerEvent>? _subscription;
   bool _isDetecting = false;
-  bool _isDetected = false;
-  StreamSubscription<MagnetometerEvent>? _magnetometerSubscription;
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  double _lastResultant = 0.0;
-  int _beepCount = 0;
-  Timer? _beepTimer;
+  bool _hasError = false;
+  String? _errorMessage;
+  int _counter = 0;
+  double _currentStrength = 0.0;
+  double _maxStrength = 0.0;
+  bool _cameraDetected = false;
+  Timer? _detectionTimer;
+  String? _detectionDistance;
 
   @override
-  void dispose() {
-    _magnetometerSubscription?.cancel();
-    _audioPlayer.dispose();
-    _beepTimer?.cancel();
-    super.dispose();
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startDetection();
+    });
+  }
+
+  String _getDistanceFromStrength(double strength) {
+    if (strength > 500) {
+      return 'Very Close (0-1 feet)';
+    } else if (strength > 200) {
+      return 'Close (1-3 feet)';
+    } else if (strength > 100) {
+      return 'Nearby (3-5 feet)';
+    } else if (strength > 50) {
+      return 'Moderate Distance (5-8 feet)';
+    } else {
+      return 'Far (8+ feet)';
+    }
   }
 
   Future<void> _startDetection() async {
-    final status = await Permission.sensors.request();
-    if (status.isDenied) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sensor permission is required')),
-      );
-      return;
-    }
-
-    setState(() {
-      _isDetecting = true;
-      _isDetected = false;
-      _beepCount = 0;
-    });
-
-    _magnetometerSubscription = magnetometerEvents.listen((event) {
-      final resultant = sqrt(
-        pow(event.x, 2) + pow(event.y, 2) + pow(event.z, 2),
-      );
-
-      if (_lastResultant == 0.0) {
-        _lastResultant = resultant;
-        return;
-      }
-
-      final difference = (resultant - _lastResultant).abs();
-      _lastResultant = resultant;
-
-      if (difference > 50 && _beepCount < 3) {
-        setState(() {
-          _isDetected = true;
-          _beepCount++;
-        });
-        _playBeep();
-      }
-    });
-
-    _beepTimer = Timer(const Duration(seconds: 10), () {
+    try {
+      print('Starting camera detection...');
       setState(() {
-        _isDetecting = false;
-        _isDetected = false;
+        _isDetecting = true;
+        _hasError = false;
+        _errorMessage = null;
+        _maxStrength = 0.0;
+        _cameraDetected = false;
+        _detectionDistance = null;
       });
-      _magnetometerSubscription?.cancel();
+
+      _subscription = magnetometerEvents.listen(
+        (MagnetometerEvent event) {
+          try {
+            // Calculate magnetic field strength
+            final strength = sqrt(
+              event.x * event.x + 
+              event.y * event.y + 
+              event.z * event.z
+            );
+            
+            setState(() {
+              _currentStrength = strength;
+              if (strength > _maxStrength) {
+                _maxStrength = strength;
+              }
+            });
+            
+            // Print strength every 50 readings for debugging
+            _counter++;
+            if (_counter % 50 == 0) {
+              print('Magnetometer strength: $strength');
+            }
+            
+            // If magnetic field strength is above threshold, potential camera detected
+            if (strength > 50) { // Increased threshold for more accurate detection
+              print('Potential camera detected! Magnetic field strength: $strength');
+              _handleCameraDetection(strength);
+            }
+          } catch (e) {
+            print('Error processing magnetometer data: $e');
+          }
+        },
+        onError: (error) {
+          print('Magnetometer error: $error');
+          setState(() {
+            _hasError = true;
+            _errorMessage = 'Error reading sensor data. Please try again.';
+          });
+        },
+        cancelOnError: true,
+      );
+    } catch (e) {
+      print('Error starting detection: $e');
+      setState(() {
+        _hasError = true;
+        _errorMessage = 'Error starting camera detection. Please try again.';
+      });
+    }
+  }
+
+  void _handleCameraDetection(double strength) {
+    if (!_cameraDetected) {
+      setState(() {
+        _cameraDetected = true;
+        _detectionDistance = _getDistanceFromStrength(strength);
+      });
+      _playBeep();
+      
+      // Reset detection after 5 seconds
+      _detectionTimer?.cancel();
+      _detectionTimer = Timer(const Duration(seconds: 5), () {
+        setState(() {
+          _cameraDetected = false;
+          _detectionDistance = null;
+        });
+      });
+    }
+  }
+
+  void _stopDetection() {
+    _subscription?.cancel();
+    _detectionTimer?.cancel();
+    setState(() {
+      _isDetecting = false;
+      _cameraDetected = false;
+      _detectionDistance = null;
     });
   }
 
   Future<void> _playBeep() async {
-    await _audioPlayer.play(AssetSource('beep.mp3'));
+    try {
+      await _audioPlayer.play(AssetSource('beep.mp3'));
+    } catch (e) {
+      print('Error playing beep sound: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    _detectionTimer?.cancel();
+    _audioPlayer.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              _isDetected
-                  ? Colors.red.shade400
-                  : _isDetecting
-                      ? Colors.blue.shade400
-                      : Colors.grey.shade300,
-              _isDetected
-                  ? Colors.red.shade600
-                  : _isDetecting
-                      ? Colors.blue.shade600
-                      : Colors.grey.shade400,
-            ],
-          ),
-          borderRadius: BorderRadius.circular(15),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  _isDetected
-                      ? Icons.warning_rounded
-                      : Icons.camera_alt_rounded,
-                  color: Colors.white,
-                  size: 24,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Hidden Camera Detector',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (_hasError)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(
+                _errorMessage ?? 'An error occurred',
+                style: const TextStyle(color: Colors.red),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          if (_cameraDetected)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red),
+              ),
+              child: Column(
+                children: [
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.warning, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text(
+                        'Camera Detected!',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Approximate Distance: ${_detectionDistance ?? 'Unknown'}',
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (_isDetecting)
+            Column(
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                const Text(
+                  'Scanning for hidden cameras...',
+                  style: TextStyle(fontSize: 16),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Move your device around the room to detect magnetic fields',
+                  style: TextStyle(fontSize: 14, color: Colors.grey),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Current Strength: ${_currentStrength.toStringAsFixed(2)} µT',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Maximum Strength: ${_maxStrength.toStringAsFixed(2)} µT',
+                  style: const TextStyle(fontSize: 14, color: Colors.grey),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: _stopDetection,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Stop Scanning'),
+                ),
+              ],
+            )
+          else
+            Column(
+              children: [
+                if (_maxStrength > 0)
+                  Column(
+                    children: [
+                      Text(
+                        'Last Maximum Strength: ${_maxStrength.toStringAsFixed(2)} µT',
+                        style: const TextStyle(fontSize: 14, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
+                ElevatedButton(
+                  onPressed: _startDetection,
+                  child: const Text('Start Detection'),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              _isDetected
-                  ? 'Potential hidden camera detected!'
-                  : _isDetecting
-                      ? 'Scanning for hidden cameras...'
-                      : 'Detect hidden cameras in your surroundings',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.white,
-                  ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _isDetecting ? null : _startDetection,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: _isDetecting
-                    ? Colors.blue.shade400
-                    : Colors.blue.shade600,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-              ),
-              child: Text(
-                _isDetecting ? 'Scanning...' : 'Start Detection',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }

@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:secureher/screens/login_screen.dart';
+import 'package:secureher/screens/register_screen.dart';
 import 'package:secureher/screens/main_screen.dart';
 import 'package:secureher/screens/onboarding_screen.dart';
 import 'package:secureher/services/emergency_contact_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,11 +21,11 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  bool _isDarkMode = false;
+  ThemeMode _themeMode = ThemeMode.system;
 
   void _toggleTheme() {
     setState(() {
-      _isDarkMode = !_isDarkMode;
+      _themeMode = _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
     });
   }
 
@@ -40,13 +40,6 @@ class _MyAppState extends State<MyApp> {
           brightness: Brightness.light,
         ),
         useMaterial3: true,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.pink,
-          foregroundColor: Colors.white,
-        ),
-        scaffoldBackgroundColor: Colors.white,
-        cardColor: Colors.white,
-        dialogBackgroundColor: Colors.white,
       ),
       darkTheme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -54,132 +47,61 @@ class _MyAppState extends State<MyApp> {
           brightness: Brightness.dark,
         ),
         useMaterial3: true,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.pink,
-          foregroundColor: Colors.white,
-        ),
-        scaffoldBackgroundColor: Colors.black,
-        cardColor: const Color(0xFF1A1A1A),
-        dialogBackgroundColor: const Color(0xFF1A1A1A),
-        textTheme: const TextTheme(
-          bodyLarge: TextStyle(color: Colors.white),
-          bodyMedium: TextStyle(color: Colors.white),
-          titleLarge: TextStyle(color: Colors.white),
-          titleMedium: TextStyle(color: Colors.white),
-        ),
-        inputDecorationTheme: const InputDecorationTheme(
-          labelStyle: TextStyle(color: Colors.white70),
-          hintStyle: TextStyle(color: Colors.white54),
-        ),
       ),
-      themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      home: AuthWrapper(
-        toggleTheme: _toggleTheme,
-        isDarkMode: _isDarkMode,
-      ),
+      themeMode: _themeMode,
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const AuthWrapper(),
+        '/login': (context) => const LoginScreen(),
+        '/register': (context) => const RegisterScreen(),
+        '/main': (context) => MainScreen(onThemeToggle: _toggleTheme),
+      },
     );
   }
 }
 
-class AuthWrapper extends StatefulWidget {
-  final VoidCallback toggleTheme;
-  final bool isDarkMode;
-
-  const AuthWrapper({
-    super.key,
-    required this.toggleTheme,
-    required this.isDarkMode,
-  });
-
-  @override
-  State<AuthWrapper> createState() => _AuthWrapperState();
-}
-
-class _AuthWrapperState extends State<AuthWrapper> {
-  final _auth = FirebaseAuth.instance;
-  final _emergencyContactService = EmergencyContactService();
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkAuthState();
-  }
-
-  Future<void> _checkAuthState() async {
-    final user = _auth.currentUser;
-    
-    if (user != null) {
-      // User is logged in, check if onboarding is completed
-      final isOnboardingCompleted = await _emergencyContactService.isOnboardingCompleted();
-      
-      if (!mounted) return;
-      
-      setState(() => _isLoading = false);
-      
-      if (!isOnboardingCompleted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => OnboardingScreen(
-              toggleTheme: widget.toggleTheme,
-              isDarkMode: widget.isDarkMode,
-            ),
-          ),
-        );
-      } else {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => MainScreen(
-              toggleTheme: widget.toggleTheme,
-              isDarkMode: widget.isDarkMode,
-              onLogout: () {
-                _auth.signOut();
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => LoginScreen(
-                      toggleTheme: widget.toggleTheme,
-                      isDarkMode: widget.isDarkMode,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        );
-      }
-    } else {
-      // User is not logged in
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => LoginScreen(
-            toggleTheme: widget.toggleTheme,
-            isDarkMode: widget.isDarkMode,
-          ),
-        ),
-      );
-    }
-  }
+class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
-    }
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-    return const Scaffold(
-      body: Center(
-        child: CircularProgressIndicator(),
-      ),
+        if (snapshot.hasData) {
+          // User is authenticated, check onboarding status
+          return FutureBuilder<bool>(
+            future: EmergencyContactService().isOnboardingCompleted(),
+            builder: (context, onboardingSnapshot) {
+              if (onboardingSnapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (onboardingSnapshot.hasData && onboardingSnapshot.data == true) {
+                // User is authenticated and has completed onboarding
+                return MainScreen(
+                  onThemeToggle: () {
+                    final appState = context.findAncestorStateOfType<_MyAppState>();
+                    if (appState != null) {
+                      appState._toggleTheme();
+                    }
+                  },
+                );
+              } else {
+                // User is authenticated but hasn't completed onboarding
+                return const OnboardingScreen();
+              }
+            },
+          );
+        }
+
+        // User is not authenticated, show login screen
+        return const LoginScreen();
+      },
     );
   }
 }

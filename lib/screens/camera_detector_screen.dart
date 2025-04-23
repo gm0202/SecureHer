@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:secureher/widgets/hidden_camera_detector.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'dart:io' show Platform;
 
 class CameraDetectorScreen extends StatefulWidget {
   const CameraDetectorScreen({super.key});
@@ -10,64 +11,31 @@ class CameraDetectorScreen extends StatefulWidget {
 }
 
 class _CameraDetectorScreenState extends State<CameraDetectorScreen> {
-  bool _hasPermission = false;
   bool _isLoading = true;
+  bool _hasError = false;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _checkPermissions();
+    _initializeDetector();
   }
 
-  Future<void> _checkPermissions() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    final status = await Permission.sensors.status;
-    
-    if (status.isDenied) {
-      final result = await Permission.sensors.request();
+  Future<void> _initializeDetector() async {
+    try {
+      // No need to request permissions for magnetometer
       setState(() {
-        _hasPermission = result.isGranted;
         _isLoading = false;
+        _hasError = false;
       });
-    } else if (status.isPermanentlyDenied) {
+    } catch (e) {
+      print('Error initializing detector: $e');
       setState(() {
         _isLoading = false;
-      });
-      _showPermissionDeniedDialog();
-    } else {
-      setState(() {
-        _hasPermission = status.isGranted;
-        _isLoading = false;
+        _hasError = true;
+        _errorMessage = 'Error initializing camera detector. Please try again.';
       });
     }
-  }
-
-  void _showPermissionDeniedDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Permission Required'),
-        content: const Text(
-          'Sensor permission is required to use the camera detector. Please enable it in your device settings.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              openAppSettings();
-            },
-            child: const Text('Open Settings'),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -100,39 +68,37 @@ class _CameraDetectorScreenState extends State<CameraDetectorScreen> {
               const SizedBox(height: 24),
               if (_isLoading)
                 const Center(child: CircularProgressIndicator())
-              else if (!_hasPermission)
+              else if (_hasError)
                 Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Icon(
-                        Icons.sensors_off,
+                        Icons.error_outline,
                         size: 64,
                         color: Colors.red,
                       ),
                       const SizedBox(height: 16),
-                      const Text(
-                        'Sensor permission required',
-                        style: TextStyle(
+                      Text(
+                        _errorMessage ?? 'An error occurred',
+                        style: const TextStyle(
                           fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                          color: Colors.red,
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Please grant sensor permission to use the camera detector.',
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 16),
                       ElevatedButton(
-                        onPressed: _checkPermissions,
-                        child: const Text('Grant Permission'),
+                        onPressed: _initializeDetector,
+                        child: const Text('Try Again'),
                       ),
                     ],
                   ),
                 )
               else
-                const HiddenCameraDetector(),
+                const Expanded(
+                  child: HiddenCameraDetector(),
+                ),
             ],
           ),
         ),
