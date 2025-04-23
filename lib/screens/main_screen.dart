@@ -16,11 +16,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:secureher/screens/login_screen.dart';
 
 class MainScreen extends StatefulWidget {
-  final VoidCallback onThemeToggle;
+  final VoidCallback? onThemeToggle;
   
   const MainScreen({
     super.key,
-    required this.onThemeToggle,
+    this.onThemeToggle,
   });
 
   @override
@@ -104,6 +104,12 @@ Please help me!
         appBar: AppBar(
           title: const Text('SecureHer'),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.location_on),
+              onPressed: () {
+                Navigator.pushNamed(context, '/location-sharing');
+              },
+            ),
             IconButton(
               icon: Icon(
                 Theme.of(context).brightness == Brightness.light
