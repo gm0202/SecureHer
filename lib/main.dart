@@ -25,7 +25,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  ThemeMode _themeMode = ThemeMode.system;
+  final ValueNotifier<ThemeMode> _themeNotifier = ValueNotifier(ThemeMode.system);
   bool _isDarkMode = false;
 
   @override
@@ -36,65 +36,72 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _loadThemePreference() async {
     final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _isDarkMode = prefs.getBool('isDarkMode') ?? false;
-      _themeMode = _isDarkMode ? ThemeMode.dark : ThemeMode.light;
-    });
+    _isDarkMode = prefs.getBool('isDarkMode') ?? false;
+    _themeNotifier.value = _isDarkMode ? ThemeMode.dark : ThemeMode.light;
   }
 
   Future<void> _toggleTheme() async {
     final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _isDarkMode = !_isDarkMode;
-      _themeMode = _isDarkMode ? ThemeMode.dark : ThemeMode.light;
-      prefs.setBool('isDarkMode', _isDarkMode);
-    });
+    _isDarkMode = !_isDarkMode;
+    _themeNotifier.value = _isDarkMode ? ThemeMode.dark : ThemeMode.light;
+    await prefs.setBool('isDarkMode', _isDarkMode);
+  }
+
+  @override
+  void dispose() {
+    _themeNotifier.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'SecureHer',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: _themeMode,
-      initialRoute: '/',
-      onGenerateRoute: (settings) {
-        if (settings.name == '/') {
-          return MaterialPageRoute(builder: (_) => AuthWrapper(onThemeToggle: _toggleTheme));
-        } else if (settings.name == '/main') {
-          return MaterialPageRoute(builder: (_) => MainScreen(onThemeToggle: _toggleTheme));
-        } else if (settings.name == '/login') {
-          return MaterialPageRoute(builder: (_) => const LoginScreen());
-        } else if (settings.name == '/register') {
-          return MaterialPageRoute(builder: (_) => const RegisterScreen());
-        } else if (settings.name == '/onboarding') {
-          return MaterialPageRoute(builder: (_) => const OnboardingScreen());
-        } else if (settings.name == '/location-sharing') {
-          return MaterialPageRoute(builder: (_) => const LocationSharingScreen());
-        }
-        return null;
-      },
-      onGenerateInitialRoutes: (initialRoute) {
-        if (initialRoute.startsWith('secureher://track/')) {
-          final sharingCode = initialRoute.split('/').last;
-          return [
-            MaterialPageRoute(
-              builder: (_) => AuthWrapper(onThemeToggle: _toggleTheme),
-              settings: RouteSettings(
-                name: '/',
-                arguments: {'sharingCode': sharingCode},
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: _themeNotifier,
+      builder: (context, themeMode, child) {
+        return MaterialApp(
+          title: 'SecureHer',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: themeMode,
+          initialRoute: '/',
+          onGenerateRoute: (settings) {
+            if (settings.name == '/') {
+              return MaterialPageRoute(builder: (_) => AuthWrapper(onThemeToggle: _toggleTheme));
+            } else if (settings.name == '/main') {
+              return MaterialPageRoute(builder: (_) => MainScreen(onThemeToggle: _toggleTheme));
+            } else if (settings.name == '/login') {
+              return MaterialPageRoute(builder: (_) => const LoginScreen());
+            } else if (settings.name == '/register') {
+              return MaterialPageRoute(builder: (_) => const RegisterScreen());
+            } else if (settings.name == '/onboarding') {
+              return MaterialPageRoute(builder: (_) => const OnboardingScreen());
+            } else if (settings.name == '/location-sharing') {
+              return MaterialPageRoute(builder: (_) => const LocationSharingScreen());
+            }
+            return null;
+          },
+          onGenerateInitialRoutes: (initialRoute) {
+            if (initialRoute.startsWith('secureher://track/')) {
+              final sharingCode = initialRoute.split('/').last;
+              return [
+                MaterialPageRoute(
+                  builder: (_) => AuthWrapper(onThemeToggle: _toggleTheme),
+                  settings: RouteSettings(
+                    name: '/',
+                    arguments: {'sharingCode': sharingCode},
+                  ),
+                ),
+              ];
+            }
+            return [
+              MaterialPageRoute(
+                builder: (_) => AuthWrapper(onThemeToggle: _toggleTheme),
+                settings: const RouteSettings(name: '/'),
               ),
-            ),
-          ];
-        }
-        return [
-          MaterialPageRoute(
-            builder: (_) => AuthWrapper(onThemeToggle: _toggleTheme),
-            settings: const RouteSettings(name: '/'),
-          ),
-        ];
+            ];
+          },
+        );
       },
     );
   }

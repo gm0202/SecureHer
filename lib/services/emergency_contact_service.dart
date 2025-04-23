@@ -20,22 +20,22 @@ class EmergencyContactService {
         throw Exception('At least one emergency contact is required');
       }
 
-      final userRef = _firestore.collection('users').doc(_userId);
-      
-      // Convert contacts to match the schema
-      final contactsData = contacts.map((contact) => {
-        'name': contact.name,
-        'phone': contact.phoneNumber,
-        'relationship': contact.relationship,
-      }).toList();
-      
-      // Update user document with contacts and onboarding status
-      await userRef.set({
-        'onboarded': true,
-        'emergency_contacts': contactsData,
-        'lastUpdated': FieldValue.serverTimestamp(),
-        'primary_contact': contacts.isNotEmpty ? contacts[0].phoneNumber : null,
-      }, SetOptions(merge: true));
+    final userRef = _firestore.collection('users').doc(_userId);
+    
+    // Convert contacts to match the schema
+    final contactsData = contacts.map((contact) => {
+      'name': contact.name,
+      'phone': contact.phoneNumber,
+      'relationship': contact.relationship,
+    }).toList();
+    
+    // Update user document with contacts and onboarding status
+    await userRef.set({
+      'onboarded': true,
+      'emergency_contacts': contactsData,
+      'lastUpdated': FieldValue.serverTimestamp(),
+      'primary_contact': contacts.isNotEmpty ? contacts[0].phoneNumber : null,
+    }, SetOptions(merge: true));
     } catch (e) {
       print('Error saving emergency contacts: $e');
       rethrow;
@@ -44,19 +44,19 @@ class EmergencyContactService {
 
   Future<List<EmergencyContact>> getEmergencyContacts() async {
     try {
-      final userDoc = await _firestore.collection('users').doc(_userId).get();
-      
-      if (!userDoc.exists) return [];
-      
-      final data = userDoc.data();
-      if (data == null || !data.containsKey('emergency_contacts')) return [];
-      
-      final contactsData = data['emergency_contacts'] as List;
-      return contactsData.map((contact) => EmergencyContact(
-        name: contact['name'],
-        phoneNumber: contact['phone'],
-        relationship: contact['relationship'] ?? 'Emergency Contact',
-      )).toList();
+    final userDoc = await _firestore.collection('users').doc(_userId).get();
+    
+    if (!userDoc.exists) return [];
+    
+    final data = userDoc.data();
+    if (data == null || !data.containsKey('emergency_contacts')) return [];
+    
+    final contactsData = data['emergency_contacts'] as List;
+    return contactsData.map((contact) => EmergencyContact(
+      name: contact['name'],
+      phoneNumber: contact['phone'],
+      relationship: contact['relationship'] ?? 'Emergency Contact',
+    )).toList();
     } catch (e) {
       print('Error getting emergency contacts: $e');
       return [];
@@ -65,8 +65,8 @@ class EmergencyContactService {
 
   Future<bool> isOnboardingCompleted() async {
     try {
-      final userDoc = await _firestore.collection('users').doc(_userId).get();
-      return userDoc.exists && (userDoc.data()?['onboarded'] ?? false);
+    final userDoc = await _firestore.collection('users').doc(_userId).get();
+    return userDoc.exists && (userDoc.data()?['onboarded'] ?? false);
     } catch (e) {
       print('Error checking onboarding status: $e');
       return false;
@@ -75,23 +75,23 @@ class EmergencyContactService {
 
   Future<String?> getPrimaryContactNumber() async {
     try {
-      final userDoc = await _firestore.collection('users').doc(_userId).get();
-      if (!userDoc.exists) return null;
-      
-      final data = userDoc.data();
-      if (data == null) return null;
-      
-      // First try to get from primary_contact field
-      if (data.containsKey('primary_contact')) {
-        return data['primary_contact'] as String?;
-      }
-      
-      // Fallback to first emergency contact
-      if (data.containsKey('emergency_contacts') && (data['emergency_contacts'] as List).isNotEmpty) {
-        return (data['emergency_contacts'] as List)[0]['phone'] as String?;
-      }
-      
-      return null;
+    final userDoc = await _firestore.collection('users').doc(_userId).get();
+    if (!userDoc.exists) return null;
+    
+    final data = userDoc.data();
+    if (data == null) return null;
+    
+    // First try to get from primary_contact field
+    if (data.containsKey('primary_contact')) {
+      return data['primary_contact'] as String?;
+    }
+    
+    // Fallback to first emergency contact
+    if (data.containsKey('emergency_contacts') && (data['emergency_contacts'] as List).isNotEmpty) {
+      return (data['emergency_contacts'] as List)[0]['phone'] as String?;
+    }
+    
+    return null;
     } catch (e) {
       print('Error getting primary contact: $e');
       return null;

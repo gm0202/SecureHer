@@ -14,6 +14,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:secureher/screens/login_screen.dart';
+import 'package:secureher/screens/route_safety_screen.dart';
 
 class MainScreen extends StatefulWidget {
   final VoidCallback? onThemeToggle;
@@ -94,9 +95,9 @@ Please help me!''';
         subject: 'Emergency SOS Alert',
       );
     } else {
-      setState(() {
+    setState(() {
         _isSOSActive = false;
-      });
+    });
       await _audioPlayer.stop();
     }
   }
@@ -229,10 +230,18 @@ Please help me!''';
                         children: [
                           _buildQuickActionCard(
                             context,
-                            'SOS Alert',
-                            'Quick emergency alert',
-                            Icons.emergency,
-                            const Color(0xFFFF6B6B),
+                            'Route Safety',
+                            'Check route safety',
+                            Icons.route,
+                            const Color(0xFF6C63FF),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const RouteSafetyScreen(),
+                                ),
+                              );
+                            },
                           ),
                           const SizedBox(width: 12),
                           _buildQuickActionCard(

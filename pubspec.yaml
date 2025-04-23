@@ -51,7 +51,7 @@ dependencies:
   syncfusion_flutter_maps: ^23.2.7
   firebase_dynamic_links: ^5.0.7
   http: ^1.1.0
-  
+  flutter_typeahead: ^5.0.0
   
 
   # The following adds the Cupertino Icons font to your application.

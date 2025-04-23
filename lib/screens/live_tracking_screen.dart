@@ -80,74 +80,103 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
         _markers.clear();
       });
 
-      // First try with a smaller radius (500m)
-      final initialUrl = Uri.parse(
-        'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
-        '?location=${_currentPosition!.latitude},${_currentPosition!.longitude}'
-        '&radius=500'
-        '&type=$type'
-        '&key=$_apiKey',
-      );
+      // Map Google Places types to OSM tags
+      String osmTag = '';
+      switch (type) {
+        case 'police':
+          osmTag = 'amenity=police';
+          break;
+        case 'hospital':
+          osmTag = 'amenity=hospital';
+          break;
+        case 'pharmacy':
+          osmTag = 'amenity=pharmacy';
+          break;
+        case 'bus_station':
+          osmTag = 'amenity=bus_station';
+          break;
+        default:
+          osmTag = 'amenity=$type';
+      }
 
-      final initialResponse = await http.get(initialUrl);
-      if (initialResponse.statusCode == 200) {
-        final data = json.decode(initialResponse.body);
-        final results = data['results'] as List;
+      // Calculate bounding box (approximately 1km radius)
+      final lat = _currentPosition!.latitude;
+      final lon = _currentPosition!.longitude;
+      final radius = 0.01; // Approximately 1km
+      
+      // Query OSM for nearby places using a more comprehensive search
+      final response = await http.get(Uri.parse(
+        'https://overpass-api.de/api/interpreter?data=[out:json];'
+        '(node[$osmTag](${lat-radius},${lon-radius},${lat+radius},${lon+radius});'
+        'way[$osmTag](${lat-radius},${lon-radius},${lat+radius},${lon+radius});'
+        'relation[$osmTag](${lat-radius},${lon-radius},${lat+radius},${lon+radius}););'
+        'out body;>;out skel qt;',
+      ));
 
-        if (results.isNotEmpty) {
-          _updateMarkers(results);
-          return;
-        }
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['elements'] != null && data['elements'].isNotEmpty) {
+          _updateMarkers(data['elements']);
+        } else {
+          // If no results in initial area, try a wider area (approximately 5km)
+          final widerRadius = 0.05;
+          final widerResponse = await http.get(Uri.parse(
+            'https://overpass-api.de/api/interpreter?data=[out:json];'
+            '(node[$osmTag](${lat-widerRadius},${lon-widerRadius},${lat+widerRadius},${lon+widerRadius});'
+            'way[$osmTag](${lat-widerRadius},${lon-widerRadius},${lat+widerRadius},${lon+widerRadius});'
+            'relation[$osmTag](${lat-widerRadius},${lon-widerRadius},${lat+widerRadius},${lon+widerRadius}););'
+            'out body;>;out skel qt;',
+          ));
 
-        // If no results in 500m, try 1km
-        final secondUrl = Uri.parse(
-          'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
-          '?location=${_currentPosition!.latitude},${_currentPosition!.longitude}'
-          '&radius=1000'
-          '&type=$type'
-          '&key=$_apiKey',
-        );
-
-        final secondResponse = await http.get(secondUrl);
-        if (secondResponse.statusCode == 200) {
-          final secondData = json.decode(secondResponse.body);
-          final secondResults = secondData['results'] as List;
-
-          if (secondResults.isNotEmpty) {
-            _updateMarkers(secondResults);
-            return;
-          }
-
-          // If still no results, try 5km
-          final widerUrl = Uri.parse(
-            'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
-            '?location=${_currentPosition!.latitude},${_currentPosition!.longitude}'
-            '&radius=5000'
-            '&type=$type'
-            '&key=$_apiKey',
-          );
-
-          final widerResponse = await http.get(widerUrl);
           if (widerResponse.statusCode == 200) {
             final widerData = json.decode(widerResponse.body);
-            final widerResults = widerData['results'] as List;
-            
-            if (widerResults.isNotEmpty) {
-              _updateMarkers(widerResults);
+            if (widerData['elements'] != null && widerData['elements'].isNotEmpty) {
+              _updateMarkers(widerData['elements']);
             } else {
-              // If still no results, show error with API response
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('No places found. API Response: ${widerResponse.body}'),
-                  backgroundColor: Colors.red,
-                  duration: const Duration(seconds: 5),
-                ),
-              );
+              // If still no results, try a generic search
+              final genericResponse = await http.get(Uri.parse(
+                'https://overpass-api.de/api/interpreter?data=[out:json];'
+                '(node[amenity](${lat-widerRadius},${lon-widerRadius},${lat+widerRadius},${lon+widerRadius});'
+                'way[amenity](${lat-widerRadius},${lon-widerRadius},${lat+widerRadius},${lon+widerRadius});'
+                'relation[amenity](${lat-widerRadius},${lon-widerRadius},${lat+widerRadius},${lon+widerRadius}););'
+                'out body;>;out skel qt;',
+              ));
+
+              if (genericResponse.statusCode == 200) {
+                final genericData = json.decode(genericResponse.body);
+                if (genericData['elements'] != null && genericData['elements'].isNotEmpty) {
+                  // Filter for the specific type we're looking for
+                  final filteredElements = genericData['elements'].where((element) {
+                    final tags = element['tags'] as Map<String, dynamic>?;
+                    return tags != null && tags['amenity'] == type;
+                  }).toList();
+                  
+                  if (filteredElements.isNotEmpty) {
+                    _updateMarkers(filteredElements);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('No places found in the area'),
+                        backgroundColor: Colors.red,
+                        duration: Duration(seconds: 5),
+                      ),
+                    );
+                  }
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('No places found in the area'),
+                      backgroundColor: Colors.red,
+                      duration: Duration(seconds: 5),
+                    ),
+                  );
+                }
+              }
             }
           }
         }
       } else {
-        throw Exception('Failed to load places: ${initialResponse.statusCode}');
+        throw Exception('Failed to load places: ${response.statusCode}');
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -162,7 +191,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     }
   }
 
-  void _updateMarkers(List<dynamic> results) {
+  void _updateMarkers(List<dynamic> places) {
     setState(() {
       _markers.clear();
       
@@ -177,21 +206,50 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
       );
 
       // Add place markers
-      for (var place in results) {
-        final location = place['geometry']['location'];
-        _markers.add(
-          Marker(
-            markerId: MarkerId(place['place_id']),
-            position: LatLng(
-              location['lat'],
-              location['lng'],
-            ),
-            infoWindow: InfoWindow(
-              title: place['name'],
-              snippet: place['vicinity'],
-            ),
-          ),
-        );
+      for (var place in places) {
+        try {
+          if (place['type'] == 'node' || place['type'] == 'way' || place['type'] == 'relation') {
+            final tags = place['tags'] as Map<String, dynamic>?;
+            if (tags != null) {
+              final name = tags['name'] ?? 'Unnamed Place';
+              final address = tags['addr:street'] ?? '';
+              
+              // Get coordinates based on element type
+              double? lat, lon;
+              
+              if (place['type'] == 'node') {
+                lat = place['lat'] as double?;
+                lon = place['lon'] as double?;
+              } else if (place['type'] == 'way' || place['type'] == 'relation') {
+                // For ways and relations, try to get center coordinates
+                if (place['center'] != null) {
+                  lat = place['center']['lat'] as double?;
+                  lon = place['center']['lon'] as double?;
+                } else if (place['lat'] != null && place['lon'] != null) {
+                  lat = place['lat'] as double?;
+                  lon = place['lon'] as double?;
+                }
+              }
+
+              // Only add marker if we have valid coordinates
+              if (lat != null && lon != null) {
+                _markers.add(
+                  Marker(
+                    markerId: MarkerId(place['id'].toString()),
+                    position: LatLng(lat, lon),
+                    infoWindow: InfoWindow(
+                      title: name,
+                      snippet: address,
+                    ),
+                  ),
+                );
+              }
+            }
+          }
+        } catch (e) {
+          // Skip this place if there's an error processing it
+          continue;
+        }
       }
     });
 
