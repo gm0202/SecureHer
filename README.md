@@ -55,6 +55,7 @@ git clone https://github.com/gm0202/SecureHer.git
 cd SecureHer
 
 2️⃣ Install dependencies
+'''bash
 flutter pub get
 
 3️⃣ Run the application
