@@ -2,6 +2,10 @@
 
 A new Flutter project.
 
+## Download the app
+
+https://drive.google.com/file/d/1QKJfVGPerJ3m2VFb2531BH16-c7WEu-X/view?usp=drivesdk
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.
