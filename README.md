@@ -55,10 +55,11 @@ git clone https://github.com/gm0202/SecureHer.git
 cd SecureHer
 
 2️⃣ Install dependencies
-'''bash
+```bash
 flutter pub get
 
 3️⃣ Run the application
+```bash
 flutter run
 Make sure Flutter and Android Studio / Xcode are properly configured.
 
