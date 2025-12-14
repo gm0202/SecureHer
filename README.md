@@ -69,8 +69,8 @@ Camera
 Internet access
 
 These permissions are required for emergency tracking and threat detection features.
----
-##🎯 Project Goals
+
+🎯 Project Goals
 Provide fast and reliable emergency response
 
 Ensure strong data privacy and security
@@ -79,11 +79,12 @@ Deliver a simple, stress-free user experience
 
 Scale to support 1000+ concurrent users
 ---
-##🧑‍💻 Author
+🧑‍💻 Author
 Gaurang Jayant Mishra
 GitHub: https://github.com/gm0202
 LinkedIn: https://www.linkedin.com/in/gaurang-mishra-952069278/
 ---
-##📄 License
+
+📄 License
 This project is licensed under the MIT License.
 Feel free to fork, use, and contribute.
