@@ -1,17 +1,50 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function to check if user owns the document
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
     // Allow users to read and write their own emergency contacts
     match /users/{userId}/emergency_contacts/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if isOwner(userId);
     }
     
-    // Allow users to read and write their own onboarding status
+    // User Profiles
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Owner can do anything
+      allow read, write: if isOwner(userId);
+      
+      // Strict Location Access:
+      // Only allow reading location if the requester is a confirmed tracker
+      allow read: if isAuthenticated() && 
+        (resource.data.isSharingLocation == true && 
+         exists(/databases/$(database)/documents/tracking_relationships/$(request.auth.uid + '_' + userId)));
     }
     
-    // Default deny all
+    // Location Shares (Links)
+    match /location_shares/{shareId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Location Sharing Codes
+    match /location_sharing/{sharingCode} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Tracking Relationships
+    match /tracking_relationships/{relationshipId} {
+      allow read, write: if isAuthenticated();
+    }
+    
     match /{document=**} {
       allow read, write: if false;
     }

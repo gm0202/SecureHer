@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "web/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/tracking",
+      "dest": "/web/index.html"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/web/$1"
+    }
+  ],
+  "env": {
+    "FIREBASE_API_KEY": "AIzaSyBP4V9QM6aT3QjNTM5squPpPGd6EMgAWJE",
+    "FIREBASE_AUTH_DOMAIN": "her-eab33.firebaseapp.com",
+    "FIREBASE_PROJECT_ID": "her-eab33",
+    "FIREBASE_STORAGE_BUCKET": "her-eab33.firebasestorage.app",
+    "FIREBASE_MESSAGING_SENDER_ID": "1051763109707",
+    "FIREBASE_APP_ID": "1:1051763109707:web:7c5b4402c54150b9ca02ce",
+    "GOOGLE_MAPS_API_KEY": "AIzaSyA0kHChkc5NHL0Eoh4JzBKR6KyepOUWRGU"
+  }
+} 

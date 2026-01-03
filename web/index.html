@@ -1,38 +1,203 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
-  <base href="$FLUTTER_BASE_HREF">
-
   <meta charset="UTF-8">
-  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecureHer Live Location</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA0kHChkc5NHL0Eoh4JzBKR6KyepOUWRGU"></script>
+    <script>
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBP4V9QM6aT3QjNTM5squPpPGd6EMgAWJE",
+            authDomain: "her-eab33.firebaseapp.com",
+            projectId: "her-eab33",
+            storageBucket: "her-eab33.firebasestorage.app",
+            messagingSenderId: "1051763109707",
+            appId: "1:1051763109707:web:7c5b4402c54150b9ca02ce"
+        };
 
-  <!-- iOS meta tags & icons -->
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="secureher">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
-
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
-
-  <title>secureher</title>
-  <link rel="manifest" href="manifest.json">
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+    </script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+        .info-window {
+            padding: 10px;
+        }
+        .info-window h3 {
+            margin: 0 0 5px 0;
+            color: #333;
+        }
+        .info-window p {
+            margin: 0;
+            color: #666;
+        }
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 1000;
+        }
+        .error {
+            color: red;
+            margin-top: 10px;
+        }
+    </style>
 </head>
 <body>
-  <script src="flutter_bootstrap.js" async></script>
+    <div id="map"></div>
+    <div id="loading" class="loading">
+        <h3>Loading Location...</h3>
+        <p>Please wait while we connect to the live location feed.</p>
+        <p id="error" class="error"></p>
+    </div>
+
+    <script>
+        // Get sharing code from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const sharingCode = urlParams.get('code');
+
+        if (!sharingCode) {
+            document.body.innerHTML = '<div class="loading"><h3>Error</h3><p>No sharing code provided in URL. Please use a valid sharing link.</p></div>';
+        } else {
+            // Initialize map
+            let map;
+            let marker;
+            let infoWindow;
+            let unsubscribe;
+            let lastUpdateTime = null;
+
+            function initMap() {
+                try {
+                    map = new google.maps.Map(document.getElementById('map'), {
+                        center: { lat: 0, lng: 0 },
+                        zoom: 15,
+                        mapTypeId: 'roadmap'
+                    });
+
+                    infoWindow = new google.maps.InfoWindow();
+                    marker = new google.maps.Marker({
+                        map: map,
+                        icon: {
+                            url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png'
+                        }
+                    });
+
+                    // Start tracking location
+                    trackLocation(sharingCode);
+                } catch (error) {
+                    console.error('Error initializing map:', error);
+                    showError('Failed to initialize map. Please try again later.');
+                }
+            }
+
+            function showError(message) {
+                const errorElement = document.getElementById('error');
+                errorElement.textContent = message;
+                console.error(message);
+            }
+
+            async function trackLocation(sharingCode) {
+                try {
+                    // Get the sharing document
+                    const sharingDoc = await db.collection('location_sharing')
+                        .where('sharing_code', '==', sharingCode)
+                        .get();
+
+                    if (sharingDoc.empty) {
+                        throw new Error('Invalid sharing code. Please check the link and try again.');
+                    }
+
+                    const sharingData = sharingDoc.docs[0].data();
+                    const userId = sharingData.user_id;
+                    const userName = sharingData.user_name || 'User';
+
+                    // Listen for location updates
+                    unsubscribe = db.collection('users').doc(userId)
+                        .onSnapshot((doc) => {
+                            if (doc.exists) {
+                                const data = doc.data();
+                                console.log('Received update:', data);
+                                
+                                if (data.isSharingLocation && data.location) {
+                                    const location = data.location;
+                                    const position = {
+                                        lat: location.latitude,
+                                        lng: location.longitude
+                                    };
+
+                                    // Update marker position
+                                    marker.setPosition(position);
+                                    map.setCenter(position);
+
+                                    // Update info window
+                                    const updateTime = new Date();
+                                    lastUpdateTime = updateTime;
+                                    const content = `
+                                        <div class="info-window">
+                                            <h3>${userName}'s Live Location</h3>
+                                            <p>Last updated: ${updateTime.toLocaleTimeString()}</p>
+                                            <p>Latitude: ${location.latitude.toFixed(6)}</p>
+                                            <p>Longitude: ${location.longitude.toFixed(6)}</p>
+                                        </div>
+                                    `;
+                                    infoWindow.setContent(content);
+                                    infoWindow.open(map, marker);
+
+                                    document.getElementById('loading').style.display = 'none';
+                                } else {
+                                    document.getElementById('loading').innerHTML = `
+                                        <h3>Location Sharing Paused</h3>
+                                        <p>${userName} has paused location sharing.</p>
+                                    `;
+                                }
+                            } else {
+                                showError('User document not found. The sharing link may have expired.');
+                            }
+                        }, (error) => {
+                            console.error('Error listening to location updates:', error);
+                            showError('Failed to receive location updates. Please try again later.');
+                        });
+
+                    // Set up a timer to check for stale updates
+                    setInterval(() => {
+                        if (lastUpdateTime && (new Date() - lastUpdateTime) > 30000) {
+                            showError('No location updates received in the last 30 seconds. The connection may be lost.');
+                        }
+                    }, 30000);
+
+                    // Clean up listener when page is closed
+                    window.addEventListener('beforeunload', () => {
+                        if (unsubscribe) {
+                            unsubscribe();
+                        }
+                    });
+
+                } catch (error) {
+                    console.error('Error tracking location:', error);
+                    showError(error.message);
+                }
+            }
+
+            // Initialize the map when the page loads
+            window.onload = initMap;
+        }
+    </script>
 </body>
 </html>

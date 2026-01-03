@@ -1,20 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:secureher/models/emergency_contact.dart';
 import 'package:secureher/services/emergency_contact_service.dart';
-import 'package:secureher/screens/main_screen.dart';
 import 'package:secureher/widgets/home_widgets/custom_carousel.dart';
 import 'package:secureher/components/custom_textfield.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  final VoidCallback toggleTheme;
-  final bool isDarkMode;
-
-  const OnboardingScreen({
-    super.key,
-    required this.toggleTheme,
-    required this.isDarkMode,
-  });
+  const OnboardingScreen({super.key});
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -57,27 +49,27 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     });
   }
 
-  Future<void> _completeOnboarding() async {
-    if (_contacts.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please add at least one emergency contact')),
-      );
-      return;
-    }
-
-    await _emergencyContactService.saveEmergencyContacts(_contacts);
-    
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('onboarding_complete', true);
-    if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => MainScreen(
-            toggleTheme: widget.toggleTheme,
-            isDarkMode: widget.isDarkMode,
-            onLogout: () {}, // This will be handled by AuthWrapper
+  void _completeOnboarding() async {
+    try {
+      if (_contacts.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please add at least one emergency contact'),
+            backgroundColor: Colors.red,
           ),
+        );
+        return;
+      }
+
+      await _emergencyContactService.saveEmergencyContacts(_contacts);
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, '/login');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error completing onboarding: $e'),
+          backgroundColor: Colors.red,
         ),
       );
     }
@@ -88,15 +80,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Welcome to SecureHer'),
-        actions: [
-          IconButton(
-            icon: Icon(
-              widget.isDarkMode ? Icons.light_mode : Icons.dark_mode,
-              color: Colors.white,
-            ),
-            onPressed: widget.toggleTheme,
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         child: Column(

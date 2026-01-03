@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:secureher/theme/app_theme.dart';
 import 'package:secureher/screens/login_screen.dart';
 import 'package:secureher/screens/main_screen.dart';
+import 'package:secureher/screens/register_screen.dart';
 import 'package:secureher/screens/onboarding_screen.dart';
-import 'package:secureher/services/emergency_contact_service.dart';
+import 'package:secureher/screens/location_sharing_screen.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:secureher/services/emergency_contact_service.dart';
+import 'package:secureher/services/location_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,165 +25,112 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  final ValueNotifier<ThemeMode> _themeNotifier = ValueNotifier(ThemeMode.system);
   bool _isDarkMode = false;
-
-  void _toggleTheme() {
-    setState(() {
-      _isDarkMode = !_isDarkMode;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'SecureHer',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.pink,
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.pink,
-          foregroundColor: Colors.white,
-        ),
-        scaffoldBackgroundColor: Colors.white,
-        cardColor: Colors.white,
-        dialogBackgroundColor: Colors.white,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.pink,
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.pink,
-          foregroundColor: Colors.white,
-        ),
-        scaffoldBackgroundColor: Colors.black,
-        cardColor: const Color(0xFF1A1A1A),
-        dialogBackgroundColor: const Color(0xFF1A1A1A),
-        textTheme: const TextTheme(
-          bodyLarge: TextStyle(color: Colors.white),
-          bodyMedium: TextStyle(color: Colors.white),
-          titleLarge: TextStyle(color: Colors.white),
-          titleMedium: TextStyle(color: Colors.white),
-        ),
-        inputDecorationTheme: const InputDecorationTheme(
-          labelStyle: TextStyle(color: Colors.white70),
-          hintStyle: TextStyle(color: Colors.white54),
-        ),
-      ),
-      themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      home: AuthWrapper(
-        toggleTheme: _toggleTheme,
-        isDarkMode: _isDarkMode,
-      ),
-    );
-  }
-}
-
-class AuthWrapper extends StatefulWidget {
-  final VoidCallback toggleTheme;
-  final bool isDarkMode;
-
-  const AuthWrapper({
-    super.key,
-    required this.toggleTheme,
-    required this.isDarkMode,
-  });
-
-  @override
-  State<AuthWrapper> createState() => _AuthWrapperState();
-}
-
-class _AuthWrapperState extends State<AuthWrapper> {
-  final _auth = FirebaseAuth.instance;
-  final _emergencyContactService = EmergencyContactService();
-  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _checkAuthState();
+    _loadThemePreference();
   }
 
-  Future<void> _checkAuthState() async {
-    final user = _auth.currentUser;
-    
-    if (user != null) {
-      // User is logged in, check if onboarding is completed
-      final isOnboardingCompleted = await _emergencyContactService.isOnboardingCompleted();
-      
-      if (!mounted) return;
-      
-      setState(() => _isLoading = false);
-      
-      if (!isOnboardingCompleted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => OnboardingScreen(
-              toggleTheme: widget.toggleTheme,
-              isDarkMode: widget.isDarkMode,
-            ),
-          ),
-        );
-      } else {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => MainScreen(
-              toggleTheme: widget.toggleTheme,
-              isDarkMode: widget.isDarkMode,
-              onLogout: () {
-                _auth.signOut();
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => LoginScreen(
-                      toggleTheme: widget.toggleTheme,
-                      isDarkMode: widget.isDarkMode,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        );
-      }
-    } else {
-      // User is not logged in
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => LoginScreen(
-            toggleTheme: widget.toggleTheme,
-            isDarkMode: widget.isDarkMode,
-          ),
-        ),
-      );
-    }
+  Future<void> _loadThemePreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    _isDarkMode = prefs.getBool('isDarkMode') ?? true;
+    _themeNotifier.value = _isDarkMode ? ThemeMode.dark : ThemeMode.light;
+  }
+
+  Future<void> _toggleTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    _isDarkMode = !_isDarkMode;
+    _themeNotifier.value = _isDarkMode ? ThemeMode.dark : ThemeMode.light;
+    await prefs.setBool('isDarkMode', _isDarkMode);
+  }
+
+  @override
+  void dispose() {
+    _themeNotifier.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
-    }
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: _themeNotifier,
+      builder: (context, themeMode, child) {
+        return MaterialApp(
+          title: 'SecureHer',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: themeMode,
+          initialRoute: '/',
+          onGenerateRoute: (settings) {
+            if (settings.name == '/') {
+              return MaterialPageRoute(builder: (_) => AuthWrapper(onThemeToggle: _toggleTheme));
+            } else if (settings.name == '/main') {
+              return MaterialPageRoute(builder: (_) => MainScreen(onThemeToggle: _toggleTheme));
+            } else if (settings.name == '/login') {
+              return MaterialPageRoute(builder: (_) => const LoginScreen());
+            } else if (settings.name == '/register') {
+              return MaterialPageRoute(builder: (_) => const RegisterScreen());
+            } else if (settings.name == '/onboarding') {
+              return MaterialPageRoute(builder: (_) => const OnboardingScreen());
+            } else if (settings.name == '/location-sharing') {
+              return MaterialPageRoute(builder: (_) => const LocationSharingScreen());
+            }
+            return null;
+          },
+          onGenerateInitialRoutes: (initialRoute) {
+            if (initialRoute.startsWith('secureher://track/')) {
+              final sharingCode = initialRoute.split('/').last;
+              return [
+                MaterialPageRoute(
+                  builder: (_) => AuthWrapper(onThemeToggle: _toggleTheme),
+                  settings: RouteSettings(
+                    name: '/',
+                    arguments: {'sharingCode': sharingCode},
+                  ),
+                ),
+              ];
+            }
+            return [
+              MaterialPageRoute(
+                builder: (_) => AuthWrapper(onThemeToggle: _toggleTheme),
+                settings: const RouteSettings(name: '/'),
+              ),
+            ];
+          },
+        );
+      },
+    );
+  }
+}
 
-    return const Scaffold(
-      body: Center(
-        child: CircularProgressIndicator(),
-      ),
+class AuthWrapper extends StatelessWidget {
+  final VoidCallback onThemeToggle;
+
+  const AuthWrapper({super.key, required this.onThemeToggle});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        if (snapshot.hasData) {
+          return MainScreen(onThemeToggle: onThemeToggle);
+        }
+
+        return const LoginScreen();
+      },
     );
   }
 }

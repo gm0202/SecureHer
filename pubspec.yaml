@@ -31,7 +31,7 @@ dependencies:
   flutter:
     sdk: flutter
   webview_flutter: ^4.4.2
-  url_launcher: ^6.1.14
+  url_launcher: ^6.2.4
   toastification: ^1.1.0
   geolocator: ^10.1.0
   geocoding: ^2.1.1
@@ -43,6 +43,15 @@ dependencies:
   google_maps_flutter_web: ^0.5.3+3
   google_maps_flutter_platform_interface: ^2.5.3
   sensors_plus: ^4.0.2
+  permission_handler: ^11.1.0
+  firebase_database: ^11.0.0
+  firebase_core: ^3.0.0
+  cloud_firestore: ^5.0.0
+  firebase_auth: ^5.0.0
+  syncfusion_flutter_maps: ^23.2.7
+  firebase_dynamic_links: ^6.0.0
+  http: ^1.1.0
+  flutter_typeahead: ^5.0.0
   
 
   # The following adds the Cupertino Icons font to your application.
@@ -52,13 +61,6 @@ dependencies:
   google_fonts: ^6.2.1
   carousel_slider: ^4.2.1
   path_provider: ^2.1.1
-  firebase_core: ^3.13.0
-  cloud_firestore: ^5.6.6
-  firebase_auth: ^5.5.2
-  syncfusion_flutter_maps: ^23.2.7
-  permission_handler: ^11.1.0
-  firebase_database: ^11.0.0
-  
   
 
 dev_dependencies:
@@ -85,12 +87,16 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
-   - assets/
    - assets/policesiren.mp3
    - assets/beep.mp3
    - assets/greensos.png
    - assets/SOS.png
    - assets/route.jpg
+   - assets/stance.png
+   - assets/palm_strike.png
+   - assets/knee_strike.png
+   - assets/wrist_escape.png
+   - assets/bear_hug.png
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
 

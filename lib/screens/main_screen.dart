@@ -12,17 +12,16 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:secureher/screens/login_screen.dart';
+import 'package:secureher/screens/route_safety_screen.dart';
 
 class MainScreen extends StatefulWidget {
-  final VoidCallback toggleTheme;
-  final bool isDarkMode;
-  final VoidCallback onLogout;
-
+  final VoidCallback? onThemeToggle;
+  
   const MainScreen({
     super.key,
-    required this.toggleTheme,
-    required this.isDarkMode,
-    required this.onLogout,
+    this.onThemeToggle,
   });
 
   @override
@@ -32,11 +31,30 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isSOSActive = false;
+  bool _isLoading = false;
+  int _selectedIndex = 0;
+  final _auth = FirebaseAuth.instance;
 
   @override
   void dispose() {
     _audioPlayer.dispose();
     super.dispose();
+  }
+
+  void _handleLogout() async {
+    try {
+      await _auth.signOut();
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, '/login');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error logging out: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Future<void> _handleSOS() async {
@@ -50,6 +68,14 @@ class _MainScreenState extends State<MainScreen> {
 
       // Get current location
       Position position = await Geolocator.getCurrentPosition();
+      
+      // Generate Google Maps URL
+      String mapsUrl = 'https://www.google.com/maps?q=${position.latitude},${position.longitude}';
+      
+      // Generate live tracking URL with timestamp as code
+      String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      String liveTrackingUrl = 'https://livetrackingofuser.vercel.app/?code=$timestamp';
+
       String locationMessage = '''🚨 SOS ALERT 🚨
 
 I need immediate help!
@@ -58,9 +84,10 @@ I need immediate help!
 Latitude: ${position.latitude}
 Longitude: ${position.longitude}
 
-Please help me!
+📍 Static Location: $mapsUrl
+📍 Live Tracking: $liveTrackingUrl
 
-📍 Location: https://www.google.com/maps?q=${position.latitude},${position.longitude}''';
+Please help me!''';
 
       // Share via WhatsApp
       await Share.share(
@@ -77,233 +104,264 @@ Please help me!
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text('SecureHer'),
-        actions: [
-          IconButton(
-            icon: Icon(
-              widget.isDarkMode ? Icons.light_mode : Icons.dark_mode,
-              color: Colors.white,
+    return WillPopScope(
+      onWillPop: () async {
+        // Prevent back button from going back to login screen
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        appBar: AppBar(
+          title: const Text('SecureHer'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.location_on),
+              onPressed: () {
+                Navigator.pushNamed(context, '/location-sharing');
+              },
             ),
-            onPressed: widget.toggleTheme,
-          ),
-        ],
-        leading: IconButton(
-          icon: const Icon(Icons.logout, color: Colors.white),
-          onPressed: () {
-            showDialog(
-              context: context,
-              builder: (context) => AlertDialog(
-                backgroundColor: Theme.of(context).cardColor,
-                title: const Text('Logout'),
-                content: const Text('Are you sure you want to logout?'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      widget.onLogout();
-                    },
-                    child: const Text('Logout'),
-                  ),
-                ],
+            IconButton(
+              icon: Icon(
+                Theme.of(context).brightness == Brightness.light
+                    ? Icons.dark_mode
+                    : Icons.light_mode,
               ),
-            );
-          },
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _handleSOS,
-        backgroundColor: _isSOSActive ? Colors.green : AppTheme.accentColor,
-        child: const Icon(Icons.emergency, color: Colors.white),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: EdgeInsets.only(
-              left: 16,
-              right: 16,
-              top: 16,
-              bottom: MediaQuery.of(context).padding.bottom + 80,
+              onPressed: widget.onThemeToggle,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Welcome to SecureHer',
-                            style: Theme.of(context).textTheme.displayMedium,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Your personal safety companion',
-                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: AppTheme.secondaryTextColor,
-                            ),
-                          ),
-                        ],
+            IconButton(
+              icon: const Icon(Icons.logout),
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Logout'),
+                    content: const Text('Are you sure you want to logout?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
                       ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceColor,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primaryColor.withOpacity(0.1),
-                            blurRadius: 10,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.notifications,
-                        color: AppTheme.primaryColor,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 32),
-                Text(
-                  'Quick Action Cards',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).textTheme.titleLarge?.color,
-                      ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  height: 200,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: [
-                      _buildQuickActionCard(
-                        context,
-                        'SOS Alert',
-                        'Quick emergency alert',
-                        Icons.emergency,
-                        const Color(0xFFFF6B6B),
-                      ),
-                      const SizedBox(width: 16),
-                      _buildQuickActionCard(
-                        context,
-                        'Live Tracking',
-                        'Share your location',
-                        Icons.location_on,
-                        const Color(0xFF6C63FF),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const LiveTrackingScreen(),
-                            ),
-                          );
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _handleLogout();
                         },
-                      ),
-                      const SizedBox(width: 16),
-                      _buildQuickActionCard(
-                        context,
-                        'Camera Detector',
-                        'Find hidden cameras',
-                        Icons.camera_alt,
-                        const Color(0xFF00D1FF),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const CameraDetectorScreen(),
-                            ),
-                          );
-                        },
+                        child: const Text('Logout'),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 32),
-                Text(
-                  'Safety Tools',
-                  style: Theme.of(context).textTheme.displaySmall,
-                ),
-                const SizedBox(height: 16),
-                GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 16,
-                  crossAxisSpacing: 16,
-                  childAspectRatio: 1.2,
-                  children: [
-                    AnimatedFeatureCard(
-                      title: 'Emergency Contacts',
-                      description: 'Quick access to trusted contacts',
-                      icon: Icons.contacts,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const ContactsScreen(),
-                          ),
-                        );
-                      },
-                      gradientStart: const Color(0xFF6C63FF),
-                      gradientEnd: const Color(0xFF9C63FF),
-                    ),
-                    AnimatedFeatureCard(
-                      title: 'Safety Tips',
-                      description: 'Learn safety guidelines',
-                      icon: Icons.security,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const SafetyTipsScreen(),
-                          ),
-                        );
-                      },
-                      gradientStart: const Color(0xFF00D1FF),
-                      gradientEnd: const Color(0xFF00FFD1),
-                    ),
-                    AnimatedFeatureCard(
-                      title: 'Self Defense',
-                      description: 'Basic self defense techniques',
-                      icon: Icons.sports_martial_arts,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const SelfDefenseScreen(),
-                          ),
-                        );
-                      },
-                      gradientStart: const Color(0xFFFF6B6B),
-                      gradientEnd: const Color(0xFFFF8E8E),
-                    ),
-                    AnimatedFeatureCard(
-                      title: 'Emergency Services',
-                      description: 'Quick dial emergency numbers',
-                      icon: Icons.local_police,
-                      onTap: () {
-                        _showEmergencyServicesDialog(context);
-                      },
-                      gradientStart: const Color(0xFF00FFD1),
-                      gradientEnd: const Color(0xFF00D1FF),
-                    ),
-                  ],
-                ),
-              ],
+                );
+              },
             ),
+          ],
+        ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: _handleSOS,
+          backgroundColor: _isSOSActive ? Colors.green : AppTheme.accentColor,
+          child: const Icon(Icons.emergency, color: Colors.white),
+        ),
+        body: SafeArea(
+          child: CustomScrollView(
+            slivers: [
+              SliverPadding(
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 16,
+                  bottom: MediaQuery.of(context).padding.bottom + 100,
+                ),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Welcome to SecureHer',
+                                style: Theme.of(context).textTheme.displayMedium,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Your personal safety companion',
+                                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                  color: AppTheme.secondaryTextColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppTheme.surfaceColor,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppTheme.primaryColor.withOpacity(0.1),
+                                blurRadius: 10,
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.notifications,
+                            color: AppTheme.primaryColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+                    Text(
+                      'Quick Action Cards',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).textTheme.titleLarge?.color,
+                          ),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      height: 160,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: [
+                          _buildQuickActionCard(
+                            context,
+                            'Route Safety',
+                            'Check route safety',
+                            Icons.route,
+                            const Color(0xFF6C63FF),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const RouteSafetyScreen(),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 12),
+                          _buildQuickActionCard(
+                            context,
+                            'Live Tracking',
+                            'Share your location',
+                            Icons.location_on,
+                            const Color(0xFF6C63FF),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const LiveTrackingScreen(),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(width: 12),
+                          _buildQuickActionCard(
+                            context,
+                            'Camera Detector',
+                            'Find hidden cameras',
+                            Icons.camera_alt,
+                            const Color(0xFF00D1FF),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const CameraDetectorScreen(),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      'Safety Tools',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                  ]),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Transform.translate(
+                  offset: const Offset(0, -8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: GridView.count(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisCount: 2,
+                      childAspectRatio: 1.2,
+                      mainAxisSpacing: 4,
+                      crossAxisSpacing: 4,
+                      children: [
+                        AnimatedFeatureCard(
+                          title: 'Contacts',
+                          description: 'Trusted contacts',
+                          icon: Icons.contacts,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const ContactsScreen(),
+                              ),
+                            );
+                          },
+                          gradientStart: const Color(0xFF6C63FF),
+                          gradientEnd: const Color(0xFF9C63FF),
+                        ),
+                        AnimatedFeatureCard(
+                          title: 'Tips',
+                          description: 'Safety guidelines',
+                          icon: Icons.security,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const SafetyTipsScreen(),
+                              ),
+                            );
+                          },
+                          gradientStart: const Color(0xFF00D1FF),
+                          gradientEnd: const Color(0xFF00FFD1),
+                        ),
+                        AnimatedFeatureCard(
+                          title: 'Defense',
+                          description: 'Self defense',
+                          icon: Icons.sports_martial_arts,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const SelfDefenseScreen(),
+                              ),
+                            );
+                          },
+                          gradientStart: const Color(0xFFFF6B6B),
+                          gradientEnd: const Color(0xFFFF8E8E),
+                        ),
+                        AnimatedFeatureCard(
+                          title: 'Emergency',
+                          description: 'Quick dial',
+                          icon: Icons.local_police,
+                          onTap: () {
+                            _showEmergencyServicesDialog(context);
+                          },
+                          gradientStart: const Color(0xFF00FFD1),
+                          gradientEnd: const Color(0xFF00D1FF),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
