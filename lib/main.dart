@@ -36,7 +36,7 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _loadThemePreference() async {
     final prefs = await SharedPreferences.getInstance();
-    _isDarkMode = prefs.getBool('isDarkMode') ?? false;
+    _isDarkMode = prefs.getBool('isDarkMode') ?? true;
     _themeNotifier.value = _isDarkMode ? ThemeMode.dark : ThemeMode.light;
   }
 

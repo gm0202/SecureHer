@@ -64,7 +64,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       });
     } catch (e) {
       setState(() {
-        _errorMessage = 'An unexpected error occurred. Please try again.';
+        _errorMessage = 'Error: ${e.toString()}';
       });
     } finally {
       if (mounted) {
